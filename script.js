@@ -63,44 +63,47 @@ async function loadProductStates() {
     try {
         console.log('Loading product states...');
         const productsRef = collection(db, 'products');
-        const snapshot = await getDocs(productsRef);
         
-        console.log('Found products in Firestore:', snapshot.size);
-        
-        if (snapshot.empty) {
-            console.log('No products found in Firestore, initializing...');
-            await initializeProducts();
-            return;
-        }
-        
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            console.log('Loading product:', data.id, data);
-            const product = [...products.sneakerChains, ...products.stickerPacks]
-                .find(p => p.id === data.id);
+        // Set up real-time listener for products
+        onSnapshot(productsRef, (snapshot) => {
+            console.log('Product update received:', snapshot.size, 'products');
             
-            if (product) {
-                // Update all product properties from Firestore
-                Object.assign(product, {
-                    sold: data.sold || false,
-                    quantity: data.quantity || 1,
-                    name: data.name,
-                    price: data.price,
-                    image: data.image
-                });
+            // Clear existing products
+            sneakerChainsContainer.innerHTML = '';
+            stickerPacksContainer.innerHTML = '';
+            
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                console.log('Loading product:', data.id, data);
+                const product = [...products.sneakerChains, ...products.stickerPacks]
+                    .find(p => p.id === data.id);
                 
-                // Add description for sticker packs
-                if (data.description) {
-                    product.description = data.description;
+                if (product) {
+                    // Update all product properties from Firestore
+                    Object.assign(product, {
+                        sold: data.sold || false,
+                        quantity: data.quantity || 1,
+                        name: data.name,
+                        price: data.price,
+                        image: data.image
+                    });
+                    
+                    // Add description for sticker packs
+                    if (data.description) {
+                        product.description = data.description;
+                    }
+                    console.log('Updated product:', product.id, product);
+                } else {
+                    console.log('Product not found in local data:', data.id);
                 }
-                console.log('Updated product:', product.id, product);
-            } else {
-                console.log('Product not found in local data:', data.id);
-            }
+            });
+            
+            // Display products after all updates
+            displayProducts();
+        }, (error) => {
+            console.error('Error in products listener:', error);
         });
         
-        console.log('Products loaded from Firestore');
-        displayProducts();
     } catch (error) {
         console.error('Error loading products:', error);
     }
@@ -125,7 +128,7 @@ async function saveProductStates() {
                 sold: product.sold,
                 type: product.id.startsWith('chain') ? 'chain' : 'sticker',
                 ...(product.description && { description: product.description })
-            });
+            }, { merge: true }); // Use merge to only update specified fields
         }
         
         console.log('Products saved to Firestore');
@@ -511,39 +514,47 @@ async function initializeProducts() {
     try {
         console.log('Starting product initialization...');
         const productsRef = collection(db, 'products');
+        const snapshot = await getDocs(productsRef);
         
-        // Initialize sneaker chains
-        for (const chain of products.sneakerChains) {
-            console.log('Adding chain:', chain.id);
-            const docRef = doc(productsRef, chain.id);
-            await setDoc(docRef, {
-                id: chain.id,
-                name: chain.name,
-                price: chain.price,
-                image: chain.image,
-                quantity: chain.quantity,
-                sold: chain.sold,
-                type: 'chain'
-            });
+        // Only initialize if no products exist
+        if (snapshot.empty) {
+            console.log('No products found, initializing...');
+            
+            // Initialize sneaker chains
+            for (const chain of products.sneakerChains) {
+                console.log('Adding chain:', chain.id);
+                const docRef = doc(productsRef, chain.id);
+                await setDoc(docRef, {
+                    id: chain.id,
+                    name: chain.name,
+                    price: chain.price,
+                    image: chain.image,
+                    quantity: chain.quantity,
+                    sold: chain.sold,
+                    type: 'chain'
+                });
+            }
+            
+            // Initialize sticker packs
+            for (const pack of products.stickerPacks) {
+                console.log('Adding sticker pack:', pack.id);
+                const docRef = doc(productsRef, pack.id);
+                await setDoc(docRef, {
+                    id: pack.id,
+                    name: pack.name,
+                    price: pack.price,
+                    image: pack.image,
+                    quantity: pack.quantity,
+                    sold: pack.sold,
+                    description: pack.description,
+                    type: 'sticker'
+                });
+            }
+            
+            console.log('Products initialized in Firestore');
+        } else {
+            console.log('Products already exist in Firestore');
         }
-        
-        // Initialize sticker packs
-        for (const pack of products.stickerPacks) {
-            console.log('Adding sticker pack:', pack.id);
-            const docRef = doc(productsRef, pack.id);
-            await setDoc(docRef, {
-                id: pack.id,
-                name: pack.name,
-                price: pack.price,
-                image: pack.image,
-                quantity: pack.quantity,
-                sold: pack.sold,
-                description: pack.description,
-                type: 'sticker'
-            });
-        }
-        
-        console.log('Products initialized in Firestore');
     } catch (error) {
         console.error('Error initializing products:', error);
     }
@@ -554,8 +565,7 @@ async function initializeStore() {
     try {
         console.log('Starting store initialization...');
         await initializeProducts();
-        await loadProductStates();
-        displayProducts();
+        await loadProductStates(); // This now sets up the real-time listener
         displayPurchaseHistory();
         console.log('Store initialization complete');
     } catch (error) {
