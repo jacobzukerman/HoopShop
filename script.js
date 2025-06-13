@@ -415,13 +415,50 @@ async function deletePurchase(purchaseId) {
 // Clear all saved data
 async function clearAllData() {
     try {
+        console.log('Starting data clear process...');
+        
         // Clear purchases
         const purchasesRef = collection(db, 'purchases');
         const purchasesSnapshot = await getDocs(purchasesRef);
         const deletePromises = purchasesSnapshot.docs.map(doc => deleteDoc(doc.ref));
         await Promise.all(deletePromises);
+        console.log('Purchase history cleared');
         
         // Reset products to initial state
+        const productsRef = collection(db, 'products');
+        
+        // Reset sneaker chains
+        for (const chain of products.sneakerChains) {
+            const docRef = doc(productsRef, chain.id);
+            await setDoc(docRef, {
+                id: chain.id,
+                name: chain.name,
+                price: chain.price,
+                image: chain.image,
+                quantity: 1,
+                sold: false,
+                type: 'chain'
+            });
+            console.log('Reset chain:', chain.id);
+        }
+        
+        // Reset sticker packs
+        for (const pack of products.stickerPacks) {
+            const docRef = doc(productsRef, pack.id);
+            await setDoc(docRef, {
+                id: pack.id,
+                name: pack.name,
+                price: pack.price,
+                image: pack.image,
+                quantity: pack.id === 'basketball-stars' ? 34 : 22,
+                sold: false,
+                description: pack.description,
+                type: 'sticker'
+            });
+            console.log('Reset sticker pack:', pack.id);
+        }
+        
+        // Update local state
         products.sneakerChains.forEach(chain => {
             chain.sold = false;
             chain.quantity = 1;
@@ -436,14 +473,7 @@ async function clearAllData() {
             }
         });
         
-        // Save reset products
-        await saveProductStates();
-        
-        // Update display
-        sneakerChainsContainer.innerHTML = '';
-        stickerPacksContainer.innerHTML = '';
-        displayProducts();
-        
+        console.log('All data has been cleared and reset');
         showNotification('All data has been cleared');
     } catch (error) {
         console.error('Error clearing data:', error);
