@@ -314,6 +314,16 @@ nav {
     color: white;
 }
 
+.cart-item-details {
+    flex: 1;
+}
+
+.cart-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
 .cart-item-details h4 {
     color: white;
     margin-bottom: 0.25rem;
@@ -550,4 +560,21 @@ nav {
 }
 
 /* Add Old English font import */
-@import url('https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap'); 
+@import url('https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&display=swap');
+
+.remove-item {
+    background: none;
+    border: none;
+    color: #ff4444;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    line-height: 1;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.remove-item:hover {
+    background-color: rgba(255, 68, 68, 0.1);
+    transform: scale(1.1);
+} 

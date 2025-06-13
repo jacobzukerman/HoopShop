@@ -172,6 +172,28 @@ function addToCart(product) {
     showNotification(`${product.name} added to cart!`);
 }
 
+// Remove from cart
+function removeFromCart(itemId) {
+    const itemIndex = cart.findIndex(item => item.id === itemId);
+    if (itemIndex === -1) return;
+
+    const item = cart[itemIndex];
+    const product = [...products.sneakerChains, ...products.stickerPacks]
+        .find(p => p.id === itemId);
+
+    // Restore quantity if it's a sticker pack
+    if (product && !product.id.startsWith('chain')) {
+        product.quantity += item.quantity;
+    }
+
+    // Remove item from cart
+    cart.splice(itemIndex, 1);
+
+    // Update UI
+    updateCart();
+    showNotification('Item removed from cart');
+}
+
 // Update cart
 function updateCart() {
     cartCount.textContent = cart.reduce((total, item) => total + item.quantity, 0);
@@ -190,14 +212,25 @@ function updateCart() {
                 <h4>${item.name}</h4>
                 <p>$${item.price.toFixed(2)} x ${item.quantity}</p>
             </div>
-            <div class="cart-item-total">
-                $${itemTotal.toFixed(2)}
+            <div class="cart-item-actions">
+                <div class="cart-item-total">
+                    $${itemTotal.toFixed(2)}
+                </div>
+                <button class="remove-item" data-id="${item.id}">×</button>
             </div>
         `;
         cartItems.appendChild(cartItem);
     });
     
     cartTotalAmount.textContent = total.toFixed(2);
+
+    // Add event listeners to remove buttons
+    document.querySelectorAll('.remove-item').forEach(button => {
+        button.addEventListener('click', () => {
+            const itemId = button.dataset.id;
+            removeFromCart(itemId);
+        });
+    });
 }
 
 // Show notification
