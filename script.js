@@ -439,6 +439,9 @@ async function clearAllData() {
                 sold: false,
                 type: 'chain'
             });
+            // Update local state
+            chain.sold = false;
+            chain.quantity = 1;
             console.log('Reset chain:', chain.id);
         }
         
@@ -455,23 +458,24 @@ async function clearAllData() {
                 description: pack.description,
                 type: 'sticker'
             });
-            console.log('Reset sticker pack:', pack.id);
-        }
-        
-        // Update local state
-        products.sneakerChains.forEach(chain => {
-            chain.sold = false;
-            chain.quantity = 1;
-        });
-        
-        products.stickerPacks.forEach(pack => {
+            // Update local state
             pack.sold = false;
             if (pack.id === 'basketball-stars') {
                 pack.quantity = 34;
             } else if (pack.id === 'shoe-stickers') {
                 pack.quantity = 22;
             }
-        });
+            console.log('Reset sticker pack:', pack.id);
+        }
+        
+        // Clear cart
+        cart = [];
+        updateCart();
+        
+        // Force refresh display
+        sneakerChainsContainer.innerHTML = '';
+        stickerPacksContainer.innerHTML = '';
+        displayProducts();
         
         console.log('All data has been cleared and reset');
         showNotification('All data has been cleared');
