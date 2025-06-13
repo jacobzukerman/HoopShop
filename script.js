@@ -60,11 +60,15 @@ const purchaseHistory = document.getElementById('purchase-history');
 // Load saved product states
 async function loadProductStates() {
     try {
+        console.log('Loading product states...');
         const productsRef = collection(db, 'products');
         const snapshot = await getDocs(productsRef);
         
+        console.log('Found products in Firestore:', snapshot.size);
+        
         snapshot.forEach(doc => {
             const data = doc.data();
+            console.log('Loading product:', data.id);
             const product = [...products.sneakerChains, ...products.stickerPacks]
                 .find(p => p.id === data.id);
             
@@ -82,6 +86,9 @@ async function loadProductStates() {
                 if (data.description) {
                     product.description = data.description;
                 }
+                console.log('Updated product:', product.id);
+            } else {
+                console.log('Product not found in local data:', data.id);
             }
         });
         
@@ -481,8 +488,11 @@ checkoutBtn.addEventListener('click', () => {
 // Initialize products in Firestore
 async function initializeProducts() {
     try {
+        console.log('Starting product initialization...');
         const productsRef = collection(db, 'products');
         const snapshot = await getDocs(productsRef);
+        
+        console.log('Firestore snapshot:', snapshot.empty ? 'empty' : 'has data');
         
         // Only initialize if no products exist
         if (snapshot.empty) {
@@ -490,6 +500,7 @@ async function initializeProducts() {
             
             // Initialize sneaker chains
             for (const chain of products.sneakerChains) {
+                console.log('Adding chain:', chain.id);
                 await addDoc(productsRef, {
                     id: chain.id,
                     name: chain.name,
@@ -503,6 +514,7 @@ async function initializeProducts() {
             
             // Initialize sticker packs
             for (const pack of products.stickerPacks) {
+                console.log('Adding sticker pack:', pack.id);
                 await addDoc(productsRef, {
                     id: pack.id,
                     name: pack.name,
@@ -527,14 +539,17 @@ async function initializeProducts() {
 // Initialize the store
 async function initializeStore() {
     try {
+        console.log('Starting store initialization...');
         await initializeProducts();
         await loadProductStates();
         displayProducts();
         displayPurchaseHistory();
+        console.log('Store initialization complete');
     } catch (error) {
         console.error('Error initializing store:', error);
     }
 }
 
 // Start the store
+console.log('Starting application...');
 initializeStore(); 
