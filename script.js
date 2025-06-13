@@ -9,7 +9,8 @@ import {
     query,
     orderBy,
     onSnapshot,
-    setDoc
+    setDoc,
+    getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // Product data
@@ -403,8 +404,52 @@ function displayPurchaseHistory() {
 // Delete purchase
 async function deletePurchase(purchaseId) {
     try {
+        // Get the purchase data before deleting
         const purchaseRef = doc(db, 'purchases', purchaseId);
+        const purchaseDoc = await getDoc(purchaseRef);
+        const purchase = purchaseDoc.data();
+        
+        if (purchase && purchase.items) {
+            // Reset product states for each item in the purchase
+            const productsRef = collection(db, 'products');
+            
+            for (const item of purchase.items) {
+                const product = [...products.sneakerChains, ...products.stickerPacks]
+                    .find(p => p.id === item.id);
+                
+                if (product) {
+                    const productRef = doc(productsRef, item.id);
+                    
+                    if (item.id.startsWith('chain')) {
+                        // For chains, reset to not sold
+                        await setDoc(productRef, {
+                            sold: false,
+                            quantity: 1
+                        }, { merge: true });
+                        product.sold = false;
+                        product.quantity = 1;
+                    } else {
+                        // For sticker packs, restore quantity
+                        const newQuantity = product.quantity + item.quantity;
+                        await setDoc(productRef, {
+                            sold: newQuantity > 0 ? false : true,
+                            quantity: newQuantity
+                        }, { merge: true });
+                        product.quantity = newQuantity;
+                        product.sold = newQuantity <= 0;
+                    }
+                }
+            }
+        }
+        
+        // Delete the purchase
         await deleteDoc(purchaseRef);
+        
+        // Update display
+        sneakerChainsContainer.innerHTML = '';
+        stickerPacksContainer.innerHTML = '';
+        displayProducts();
+        
         showNotification('Purchase deleted successfully');
     } catch (error) {
         console.error('Error deleting purchase:', error);
