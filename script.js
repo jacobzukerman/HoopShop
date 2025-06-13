@@ -8,7 +8,8 @@ import {
     deleteDoc,
     query,
     orderBy,
-    onSnapshot
+    onSnapshot,
+    setDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // Product data
@@ -66,17 +67,23 @@ async function loadProductStates() {
         
         console.log('Found products in Firestore:', snapshot.size);
         
+        if (snapshot.empty) {
+            console.log('No products found in Firestore, initializing...');
+            await initializeProducts();
+            return;
+        }
+        
         snapshot.forEach(doc => {
             const data = doc.data();
-            console.log('Loading product:', data.id);
+            console.log('Loading product:', data.id, data);
             const product = [...products.sneakerChains, ...products.stickerPacks]
                 .find(p => p.id === data.id);
             
             if (product) {
                 // Update all product properties from Firestore
                 Object.assign(product, {
-                    sold: data.sold,
-                    quantity: data.quantity,
+                    sold: data.sold || false,
+                    quantity: data.quantity || 1,
                     name: data.name,
                     price: data.price,
                     image: data.image
@@ -86,7 +93,7 @@ async function loadProductStates() {
                 if (data.description) {
                     product.description = data.description;
                 }
-                console.log('Updated product:', product.id);
+                console.log('Updated product:', product.id, product);
             } else {
                 console.log('Product not found in local data:', data.id);
             }
@@ -102,14 +109,22 @@ async function loadProductStates() {
 // Save product states
 async function saveProductStates() {
     try {
+        console.log('Saving product states...');
         const productsRef = collection(db, 'products');
         
         // Update all products
         for (const product of [...products.sneakerChains, ...products.stickerPacks]) {
-            const productDoc = doc(productsRef, product.id);
-            await updateDoc(productDoc, {
+            console.log('Saving product:', product.id, product);
+            const docRef = doc(productsRef, product.id);
+            await setDoc(docRef, {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                image: product.image,
+                quantity: product.quantity,
                 sold: product.sold,
-                quantity: product.quantity
+                type: product.id.startsWith('chain') ? 'chain' : 'sticker',
+                ...(product.description && { description: product.description })
             });
         }
         
@@ -298,13 +313,16 @@ async function savePurchase(customerName, items) {
 
 // Display purchase history
 function displayPurchaseHistory() {
+    console.log('Setting up purchase history listener...');
     const purchasesRef = collection(db, 'purchases');
     const q = query(purchasesRef, orderBy('date', 'desc'));
     
     onSnapshot(q, (snapshot) => {
+        console.log('Purchase history update received:', snapshot.size, 'purchases');
         purchaseHistory.innerHTML = '';
         
         if (snapshot.empty) {
+            console.log('No purchase history available');
             purchaseHistory.innerHTML = '<p style="color: white;">No purchase history available.</p>';
             return;
         }
@@ -313,6 +331,7 @@ function displayPurchaseHistory() {
 
         snapshot.forEach(doc => {
             const purchase = doc.data();
+            console.log('Processing purchase:', purchase);
             if (!purchase || !purchase.items) return;
 
             const purchaseElement = document.createElement('div');
@@ -373,6 +392,8 @@ function displayPurchaseHistory() {
             }
         });
         purchaseHistory.appendChild(clearButton);
+    }, (error) => {
+        console.error('Error in purchase history listener:', error);
     });
 }
 
@@ -490,47 +511,39 @@ async function initializeProducts() {
     try {
         console.log('Starting product initialization...');
         const productsRef = collection(db, 'products');
-        const snapshot = await getDocs(productsRef);
         
-        console.log('Firestore snapshot:', snapshot.empty ? 'empty' : 'has data');
-        
-        // Only initialize if no products exist
-        if (snapshot.empty) {
-            console.log('Initializing products in Firestore...');
-            
-            // Initialize sneaker chains
-            for (const chain of products.sneakerChains) {
-                console.log('Adding chain:', chain.id);
-                await addDoc(productsRef, {
-                    id: chain.id,
-                    name: chain.name,
-                    price: chain.price,
-                    image: chain.image,
-                    quantity: chain.quantity,
-                    sold: chain.sold,
-                    type: 'chain'
-                });
-            }
-            
-            // Initialize sticker packs
-            for (const pack of products.stickerPacks) {
-                console.log('Adding sticker pack:', pack.id);
-                await addDoc(productsRef, {
-                    id: pack.id,
-                    name: pack.name,
-                    price: pack.price,
-                    image: pack.image,
-                    quantity: pack.quantity,
-                    sold: pack.sold,
-                    description: pack.description,
-                    type: 'sticker'
-                });
-            }
-            
-            console.log('Products initialized in Firestore');
-        } else {
-            console.log('Products already exist in Firestore');
+        // Initialize sneaker chains
+        for (const chain of products.sneakerChains) {
+            console.log('Adding chain:', chain.id);
+            const docRef = doc(productsRef, chain.id);
+            await setDoc(docRef, {
+                id: chain.id,
+                name: chain.name,
+                price: chain.price,
+                image: chain.image,
+                quantity: chain.quantity,
+                sold: chain.sold,
+                type: 'chain'
+            });
         }
+        
+        // Initialize sticker packs
+        for (const pack of products.stickerPacks) {
+            console.log('Adding sticker pack:', pack.id);
+            const docRef = doc(productsRef, pack.id);
+            await setDoc(docRef, {
+                id: pack.id,
+                name: pack.name,
+                price: pack.price,
+                image: pack.image,
+                quantity: pack.quantity,
+                sold: pack.sold,
+                description: pack.description,
+                type: 'sticker'
+            });
+        }
+        
+        console.log('Products initialized in Firestore');
     } catch (error) {
         console.error('Error initializing products:', error);
     }
