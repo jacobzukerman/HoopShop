@@ -14,7 +14,7 @@ const products = {
             name: 'NBA Superstar Stickers',
             price: 5.00,
             image: 'images/basketball-stars-pack.png',
-            quantity: 36,
+            quantity: 34,
             description: 'Set of 4',
             sold: false
         },
@@ -23,7 +23,7 @@ const products = {
             name: 'Sneaker Stickers',
             price: 5.00,
             image: 'images/shoe-stickers-pack.png',
-            quantity: 20,
+            quantity: 22,
             description: 'Set of 2',
             sold: false
         }
@@ -248,7 +248,11 @@ function clearAllData() {
     
     products.stickerPacks.forEach(pack => {
         pack.sold = false;
-        pack.quantity = pack.id === 'basketball-stars' ? 30 : 16;
+        if (pack.id === 'basketball-stars') {
+            pack.quantity = 34;
+        } else if (pack.id === 'shoe-stickers') {
+            pack.quantity = 22;
+        }
     });
     
     // Update display
@@ -273,6 +277,8 @@ function displayPurchaseHistory() {
     // Sort purchases by date, most recent first
     purchases.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    let totalAmount = 0;
+
     purchases.forEach(purchase => {
         if (!purchase || !purchase.items) return;
 
@@ -294,6 +300,8 @@ function displayPurchaseHistory() {
             return `<p>${item.name || 'Unknown Item'} x ${quantity} - $${(price * quantity).toFixed(2)}</p>`;
         }).join('');
 
+        totalAmount += purchase.total || 0;
+
         purchaseElement.innerHTML = `
             <h3>${purchase.customerName || 'Unknown Customer'}</h3>
             <div class="date">${date}</div>
@@ -306,6 +314,12 @@ function displayPurchaseHistory() {
 
         purchaseHistory.appendChild(purchaseElement);
     });
+
+    // Add total amount display
+    const totalElement = document.createElement('div');
+    totalElement.className = 'total-amount';
+    totalElement.innerHTML = `<h3>Total Sales: $${totalAmount.toFixed(2)}</h3>`;
+    purchaseHistory.appendChild(totalElement);
 
     // Add event listeners to delete buttons
     document.querySelectorAll('.delete-purchase').forEach(button => {
@@ -392,13 +406,21 @@ checkoutBtn.addEventListener('click', () => {
         return;
     }
 
-    // Mark items as sold
+    // Mark items as sold or update quantities
     cart.forEach(item => {
         const product = [...products.sneakerChains, ...products.stickerPacks]
             .find(p => p.id === item.id);
         if (product) {
-            product.sold = true;
-            product.quantity -= item.quantity;
+            if (product.id.startsWith('chain')) {
+                // For chains, mark as sold immediately
+                product.sold = true;
+            } else {
+                // For sticker packs, only mark as sold when quantity reaches 0
+                if (product.quantity <= 0) {
+                    product.sold = true;
+                    product.quantity = 0;
+                }
+            }
         }
     });
 

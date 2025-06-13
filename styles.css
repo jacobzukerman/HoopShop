@@ -366,6 +366,13 @@ nav {
     pointer-events: none;
 }
 
+.product-card.sold h3,
+.product-card.sold .price {
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+    text-decoration-color: rgba(255, 255, 255, 0.5);
+}
+
 .sold-badge {
     background-color: var(--button-color);
     color: black;
@@ -482,25 +489,23 @@ nav {
     transform: translateY(-2px);
 }
 
-.purchase-history-link {
-    text-align: center;
+.total-amount {
+    background-color: rgba(0, 0, 0, 0.9);
+    border-radius: 10px;
+    padding: 1.5rem;
     margin: 2rem 0;
+    text-align: center;
 }
 
-.purchase-history-link a {
-    display: inline-block;
-    background-color: var(--button-color);
-    color: black;
-    padding: 0.9rem 1.5rem;
-    border-radius: 25px;
-    text-decoration: none;
-    font-weight: 600;
-    transition: all 0.3s ease;
+.total-amount h3 {
+    color: var(--button-color);
+    font-size: 1.5rem;
+    margin: 0;
 }
 
-.purchase-history-link a:hover {
-    background-color: var(--button-hover);
-    transform: translateY(-2px);
+/* Remove purchase history link styles */
+.purchase-history-link {
+    display: none;
 }
 
 .clear-all-button {
