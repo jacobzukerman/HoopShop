@@ -1,3 +1,16 @@
+// Import Firestore functions
+import { 
+    collection, 
+    addDoc, 
+    getDocs, 
+    doc, 
+    updateDoc, 
+    deleteDoc,
+    query,
+    orderBy,
+    onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
 // Product data
 const products = {
     sneakerChains: Array.from({ length: 8 }, (_, i) => ({
@@ -45,51 +58,58 @@ const checkoutBtn = document.getElementById('checkout-btn');
 const purchaseHistory = document.getElementById('purchase-history');
 
 // Load saved product states
-function loadProductStates() {
-    const savedStates = JSON.parse(localStorage.getItem('productStates') || '{}');
-    console.log('Loading saved states:', savedStates);
-    
-    // Update sneaker chains
-    products.sneakerChains.forEach(chain => {
-        if (savedStates[chain.id]) {
-            chain.sold = savedStates[chain.id].sold;
-            chain.quantity = savedStates[chain.id].quantity;
-        }
-    });
-    
-    // Update sticker packs
-    products.stickerPacks.forEach(pack => {
-        if (savedStates[pack.id]) {
-            pack.sold = savedStates[pack.id].sold;
-            pack.quantity = savedStates[pack.id].quantity;
-        }
-    });
-    
-    console.log('Updated products:', products);
+async function loadProductStates() {
+    try {
+        const productsRef = collection(db, 'products');
+        const snapshot = await getDocs(productsRef);
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const product = [...products.sneakerChains, ...products.stickerPacks]
+                .find(p => p.id === data.id);
+            
+            if (product) {
+                // Update all product properties from Firestore
+                Object.assign(product, {
+                    sold: data.sold,
+                    quantity: data.quantity,
+                    name: data.name,
+                    price: data.price,
+                    image: data.image
+                });
+                
+                // Add description for sticker packs
+                if (data.description) {
+                    product.description = data.description;
+                }
+            }
+        });
+        
+        console.log('Products loaded from Firestore');
+        displayProducts();
+    } catch (error) {
+        console.error('Error loading products:', error);
+    }
 }
 
 // Save product states
-function saveProductStates() {
-    const states = {};
-    
-    // Save sneaker chains
-    products.sneakerChains.forEach(chain => {
-        states[chain.id] = {
-            sold: chain.sold,
-            quantity: chain.quantity
-        };
-    });
-    
-    // Save sticker packs
-    products.stickerPacks.forEach(pack => {
-        states[pack.id] = {
-            sold: pack.sold,
-            quantity: pack.quantity
-        };
-    });
-    
-    console.log('Saving product states:', states);
-    localStorage.setItem('productStates', JSON.stringify(states));
+async function saveProductStates() {
+    try {
+        const productsRef = collection(db, 'products');
+        
+        // Update all products
+        for (const product of [...products.sneakerChains, ...products.stickerPacks]) {
+            const productDoc = doc(productsRef, product.id);
+            await updateDoc(productDoc, {
+                sold: product.sold,
+                quantity: product.quantity
+            });
+        }
+        
+        console.log('Products saved to Firestore');
+    } catch (error) {
+        console.error('Error saving products:', error);
+    }
 }
 
 // Display products
@@ -245,174 +265,158 @@ function showNotification(message) {
     }, 2000);
 }
 
-// Save purchase to localStorage
-function savePurchase(customerName, items) {
-    const purchases = JSON.parse(localStorage.getItem('purchases') || '[]');
-    const purchase = {
-        id: Date.now(),
-        customerName,
-        items: items.map(item => ({
-            id: item.id,
-            name: item.name,
-            price: parseFloat(item.price) || 0,
-            quantity: parseInt(item.quantity) || 0
-        })),
-        date: new Date().toISOString(),
-        total: items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)), 0)
-    };
-    purchases.push(purchase);
-    localStorage.setItem('purchases', JSON.stringify(purchases));
-    displayPurchaseHistory();
-}
-
-// Clear all saved data
-function clearAllData() {
-    // Clear purchases
-    localStorage.removeItem('purchases');
-    
-    // Clear product states
-    localStorage.removeItem('productStates');
-    
-    // Reset products to initial state
-    products.sneakerChains.forEach(chain => {
-        chain.sold = false;
-        chain.quantity = 1;
-    });
-    
-    products.stickerPacks.forEach(pack => {
-        pack.sold = false;
-        if (pack.id === 'basketball-stars') {
-            pack.quantity = 34;
-        } else if (pack.id === 'shoe-stickers') {
-            pack.quantity = 22;
-        }
-    });
-    
-    // Update display
-    sneakerChainsContainer.innerHTML = '';
-    stickerPacksContainer.innerHTML = '';
-    displayProducts();
-    displayPurchaseHistory();
-    
-    showNotification('All data has been cleared');
+// Save purchase to Firestore
+async function savePurchase(customerName, items) {
+    try {
+        const purchasesRef = collection(db, 'purchases');
+        const purchase = {
+            customerName,
+            items: items.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: parseFloat(item.price) || 0,
+                quantity: parseInt(item.quantity) || 0
+            })),
+            date: new Date().toISOString(),
+            total: items.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)), 0)
+        };
+        
+        await addDoc(purchasesRef, purchase);
+        displayPurchaseHistory();
+    } catch (error) {
+        console.error('Error saving purchase:', error);
+        showNotification('Error saving purchase. Please try again.');
+    }
 }
 
 // Display purchase history
 function displayPurchaseHistory() {
-    const purchases = JSON.parse(localStorage.getItem('purchases') || '[]');
-    purchaseHistory.innerHTML = '';
-
-    if (purchases.length === 0) {
-        purchaseHistory.innerHTML = '<p style="color: white;">No purchase history available.</p>';
-        return;
-    }
-
-    // Sort purchases by date, most recent first
-    purchases.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    let totalAmount = 0;
-
-    purchases.forEach(purchase => {
-        if (!purchase || !purchase.items) return;
-
-        const purchaseElement = document.createElement('div');
-        purchaseElement.className = 'purchase-item';
+    const purchasesRef = collection(db, 'purchases');
+    const q = query(purchasesRef, orderBy('date', 'desc'));
+    
+    onSnapshot(q, (snapshot) => {
+        purchaseHistory.innerHTML = '';
         
-        const date = new Date(purchase.date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        const itemsHtml = purchase.items.map(item => {
-            if (!item || typeof item.price === 'undefined' || typeof item.quantity === 'undefined') return '';
-            const price = parseFloat(item.price) || 0;
-            const quantity = parseInt(item.quantity) || 0;
-            return `<p>${item.name || 'Unknown Item'} x ${quantity} - $${(price * quantity).toFixed(2)}</p>`;
-        }).join('');
-
-        totalAmount += purchase.total || 0;
-
-        purchaseElement.innerHTML = `
-            <h3>${purchase.customerName || 'Unknown Customer'}</h3>
-            <div class="date">${date}</div>
-            <div class="items">
-                ${itemsHtml}
-            </div>
-            <div class="total">Total: $${(purchase.total || 0).toFixed(2)}</div>
-            <button class="delete-purchase" data-id="${purchase.id}">Delete Purchase</button>
-        `;
-
-        purchaseHistory.appendChild(purchaseElement);
-    });
-
-    // Add total amount display
-    const totalElement = document.createElement('div');
-    totalElement.className = 'total-amount';
-    totalElement.innerHTML = `<h3>Total Sales: $${totalAmount.toFixed(2)}</h3>`;
-    purchaseHistory.appendChild(totalElement);
-
-    // Add event listeners to delete buttons
-    document.querySelectorAll('.delete-purchase').forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            const purchaseId = parseInt(button.dataset.id);
-            deletePurchase(purchaseId);
-        });
-    });
-
-    // Add clear all button at the bottom
-    const clearButton = document.createElement('button');
-    clearButton.className = 'clear-all-button';
-    clearButton.textContent = 'Clear All Data';
-    clearButton.addEventListener('click', () => {
-        if (confirm('Are you sure you want to clear all purchase history and reset all products?')) {
-            clearAllData();
+        if (snapshot.empty) {
+            purchaseHistory.innerHTML = '<p style="color: white;">No purchase history available.</p>';
+            return;
         }
+
+        let totalAmount = 0;
+
+        snapshot.forEach(doc => {
+            const purchase = doc.data();
+            if (!purchase || !purchase.items) return;
+
+            const purchaseElement = document.createElement('div');
+            purchaseElement.className = 'purchase-item';
+            
+            const date = new Date(purchase.date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            const itemsHtml = purchase.items.map(item => {
+                if (!item || typeof item.price === 'undefined' || typeof item.quantity === 'undefined') return '';
+                const price = parseFloat(item.price) || 0;
+                const quantity = parseInt(item.quantity) || 0;
+                return `<p>${item.name || 'Unknown Item'} x ${quantity} - $${(price * quantity).toFixed(2)}</p>`;
+            }).join('');
+
+            totalAmount += purchase.total || 0;
+
+            purchaseElement.innerHTML = `
+                <h3>${purchase.customerName || 'Unknown Customer'}</h3>
+                <div class="date">${date}</div>
+                <div class="items">
+                    ${itemsHtml}
+                </div>
+                <div class="total">Total: $${(purchase.total || 0).toFixed(2)}</div>
+                <button class="delete-purchase" data-id="${doc.id}">Delete Purchase</button>
+            `;
+
+            purchaseHistory.appendChild(purchaseElement);
+        });
+
+        // Add total amount display
+        const totalElement = document.createElement('div');
+        totalElement.className = 'total-amount';
+        totalElement.innerHTML = `<h3>Total Sales: $${totalAmount.toFixed(2)}</h3>`;
+        purchaseHistory.appendChild(totalElement);
+
+        // Add event listeners to delete buttons
+        document.querySelectorAll('.delete-purchase').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const purchaseId = button.dataset.id;
+                deletePurchase(purchaseId);
+            });
+        });
+
+        // Add clear all button at the bottom
+        const clearButton = document.createElement('button');
+        clearButton.className = 'clear-all-button';
+        clearButton.textContent = 'Clear All Data';
+        clearButton.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear all purchase history and reset all products?')) {
+                clearAllData();
+            }
+        });
+        purchaseHistory.appendChild(clearButton);
     });
-    purchaseHistory.appendChild(clearButton);
 }
 
 // Delete purchase
-function deletePurchase(purchaseId) {
-    console.log('Attempting to delete purchase:', purchaseId);
-    const purchases = JSON.parse(localStorage.getItem('purchases') || '[]');
-    console.log('Current purchases:', purchases);
-    
-    const purchaseToDelete = purchases.find(p => p.id === purchaseId);
-    console.log('Purchase to delete:', purchaseToDelete);
-    
-    if (purchaseToDelete) {
-        // Restore quantities and sold states
-        purchaseToDelete.items.forEach(item => {
-            console.log('Processing item:', item);
-            const product = [...products.sneakerChains, ...products.stickerPacks]
-                .find(p => p.id === item.id);
-            console.log('Found product:', product);
-            
-            if (product) {
-                product.quantity += item.quantity;
-                product.sold = false;
-                console.log('Updated product:', product);
+async function deletePurchase(purchaseId) {
+    try {
+        const purchaseRef = doc(db, 'purchases', purchaseId);
+        await deleteDoc(purchaseRef);
+        showNotification('Purchase deleted successfully');
+    } catch (error) {
+        console.error('Error deleting purchase:', error);
+        showNotification('Error deleting purchase. Please try again.');
+    }
+}
+
+// Clear all saved data
+async function clearAllData() {
+    try {
+        // Clear purchases
+        const purchasesRef = collection(db, 'purchases');
+        const purchasesSnapshot = await getDocs(purchasesRef);
+        const deletePromises = purchasesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        // Reset products to initial state
+        products.sneakerChains.forEach(chain => {
+            chain.sold = false;
+            chain.quantity = 1;
+        });
+        
+        products.stickerPacks.forEach(pack => {
+            pack.sold = false;
+            if (pack.id === 'basketball-stars') {
+                pack.quantity = 34;
+            } else if (pack.id === 'shoe-stickers') {
+                pack.quantity = 22;
             }
         });
         
-        // Remove the purchase
-        const updatedPurchases = purchases.filter(p => p.id !== purchaseId);
-        localStorage.setItem('purchases', JSON.stringify(updatedPurchases));
+        // Save reset products
+        await saveProductStates();
         
-        // Save updated product states
-        saveProductStates();
-        
-        // Update the display
+        // Update display
         sneakerChainsContainer.innerHTML = '';
         stickerPacksContainer.innerHTML = '';
         displayProducts();
-        displayPurchaseHistory();
         
-        showNotification('Purchase deleted successfully');
+        showNotification('All data has been cleared');
+    } catch (error) {
+        console.error('Error clearing data:', error);
+        showNotification('Error clearing data. Please try again.');
     }
 }
 
@@ -474,7 +478,63 @@ checkoutBtn.addEventListener('click', () => {
     cartModal.style.display = 'none';
 });
 
+// Initialize products in Firestore
+async function initializeProducts() {
+    try {
+        const productsRef = collection(db, 'products');
+        const snapshot = await getDocs(productsRef);
+        
+        // Only initialize if no products exist
+        if (snapshot.empty) {
+            console.log('Initializing products in Firestore...');
+            
+            // Initialize sneaker chains
+            for (const chain of products.sneakerChains) {
+                await addDoc(productsRef, {
+                    id: chain.id,
+                    name: chain.name,
+                    price: chain.price,
+                    image: chain.image,
+                    quantity: chain.quantity,
+                    sold: chain.sold,
+                    type: 'chain'
+                });
+            }
+            
+            // Initialize sticker packs
+            for (const pack of products.stickerPacks) {
+                await addDoc(productsRef, {
+                    id: pack.id,
+                    name: pack.name,
+                    price: pack.price,
+                    image: pack.image,
+                    quantity: pack.quantity,
+                    sold: pack.sold,
+                    description: pack.description,
+                    type: 'sticker'
+                });
+            }
+            
+            console.log('Products initialized in Firestore');
+        } else {
+            console.log('Products already exist in Firestore');
+        }
+    } catch (error) {
+        console.error('Error initializing products:', error);
+    }
+}
+
 // Initialize the store
-loadProductStates(); // Load saved states first
-displayProducts();
-displayPurchaseHistory(); 
+async function initializeStore() {
+    try {
+        await initializeProducts();
+        await loadProductStates();
+        displayProducts();
+        displayPurchaseHistory();
+    } catch (error) {
+        console.error('Error initializing store:', error);
+    }
+}
+
+// Start the store
+initializeStore(); 
